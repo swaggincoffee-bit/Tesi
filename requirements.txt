@@ -1,0 +1,11 @@
+pandas>=2.0
+numpy
+scikit-learn
+statsmodels
+linearmodels
+matplotlib
+seaborn
+pyarrow
+jupyter
+xgboost
+lightgbm
