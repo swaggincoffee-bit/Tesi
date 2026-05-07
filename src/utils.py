@@ -73,6 +73,50 @@ def build_target(df_lett_re, df_anagrafica, finestre):
     return df_target
 
 
+def feat_engineer(df_cs, ref_date):
+    """
+    Aggiunge variabili numeriche e alias leggibili al dataframe cross-section.
+
+    ref_date: data di riferimento per calcolare i giorni (usa DATA_MAX del dataset letture)
+
+    Colonne aggiunte:
+      eta_anni            → anni dal costruzione al ref_date
+      consumo_annuo       → consumo annuo PDR numerico
+      gg_da_installazione → giorni dall'installazione al ref_date
+      firmware_num        → parte numerica della versione firmware
+      gg_da_ult_com       → giorni dall'ultima comunicazione al ref_date
+      gg_da_ult_mis       → giorni dall'ultima misura al ref_date
+      costruttore         → alias leggibile di COL_COSTRUTTORE
+      modello             → alias leggibile di COL_MODELLO
+      tecnologia          → alias leggibile di COL_TECN_COM
+    """
+    from src.config import (
+        COL_ANNO_COSTR, COL_CONSUMO, COL_DATA_INST,
+        COL_FIRMWARE, COL_ULT_COM, COL_ULT_MIS,
+        COL_COSTRUTTORE, COL_MODELLO, COL_TECN_COM,
+    )
+
+    df = df_cs.copy()
+
+    df["eta_anni"]            = ref_date.year - pd.to_numeric(df[COL_ANNO_COSTR], errors="coerce")
+    df["consumo_annuo"]       = pd.to_numeric(df[COL_CONSUMO], errors="coerce")
+    df["gg_da_installazione"] = (
+        ref_date - pd.to_datetime(df[COL_DATA_INST], format="%d.%m.%Y", errors="coerce")
+    ).dt.days
+    df["firmware_num"]        = pd.to_numeric(
+        df[COL_FIRMWARE].str.extract(r"(\d+)")[0], errors="coerce"
+    )
+    df["gg_da_ult_com"]       = (ref_date - parse_oracle_dates(df[COL_ULT_COM])).dt.days
+    df["gg_da_ult_mis"]       = (ref_date - parse_oracle_dates(df[COL_ULT_MIS])).dt.days
+
+    # Alias leggibili per le categoriche (evita KeyError su nomi colonna lunghi)
+    df["costruttore"] = df[COL_COSTRUTTORE].fillna("N/A")
+    df["modello"]     = df[COL_MODELLO].fillna("N/A")
+    df["tecnologia"]  = df[COL_TECN_COM].fillna("N/A")
+
+    return df
+
+
 def feat_aggregate(df_target, df_anagrafica):
     """
     Collassa il panel in cross-section aggregando le finestre per contatore.
