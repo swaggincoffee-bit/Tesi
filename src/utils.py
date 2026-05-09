@@ -104,7 +104,7 @@ def feat_engineer(df_cs, ref_date):
     ref_date: data di riferimento per calcolare i giorni (usa DATA_MAX del dataset letture)
 
     Colonne aggiunte:
-      eta_anni            -> anni dalla costruzione al ref_date
+      anni_da_costruzione -> anni dalla costruzione al ref_date
       consumo_annuo       -> consumo annuo PDR numerico
       gg_da_installazione -> giorni dall'installazione al ref_date
       firmware_num        -> parte numerica della versione firmware
@@ -122,7 +122,7 @@ def feat_engineer(df_cs, ref_date):
 
     df = df_cs.copy()
 
-    df["eta_anni"] = ref_date.year - pd.to_numeric(df[COL_ANNO_COSTR], errors="coerce")
+    df["anni_da_costruzione"] = ref_date.year - pd.to_numeric(df[COL_ANNO_COSTR], errors="coerce")
 
     df["consumo_annuo"] = pd.to_numeric(
         df[COL_CONSUMO].str.replace(",", "."), errors="coerce"
