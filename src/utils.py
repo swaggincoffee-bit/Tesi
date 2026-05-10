@@ -79,7 +79,7 @@ def build_target(df_lett_re, df_anagrafica, finestre):
     return df_target
 
 
-def feat_aggregate(df_target, df_anagrafica):
+def feat_aggregate(df_target, df_anagrafica, df_lett_re=None):
     """
     Collassa il panel in cross-section aggregando le finestre per contatore.
 
@@ -87,14 +87,43 @@ def feat_aggregate(df_target, df_anagrafica):
       pct_silente        -> proporzione di finestre silenti [0, 1]
       n_finestre         -> numero di finestre osservate
       silente_prevalente -> 1 se pct_silente > 0.5
+
+    Se df_lett_re è fornito, aggiunge anche:
+      pct_err         -> proporzione di letture con stato ERR per contatore
+      diag_bit_00..15 -> 1 se almeno una lettura ha quel bit diagnostico attivo
     """
+    from src.config import COL_STATO_LETT, COL_DIAGNOSTICA
+
     agg = (
         df_target.groupby("_key")["silente"]
         .agg(pct_silente="mean", n_finestre="count")
         .reset_index()
     )
     agg["silente_prevalente"] = (agg["pct_silente"] > 0.5).astype(int)
-    return df_anagrafica.merge(agg, on="_key", how="left")
+    df_cs = df_anagrafica.merge(agg, on="_key", how="left")
+
+    if df_lett_re is not None:
+        lett = df_lett_re.copy()
+
+        # pct_err
+        lett["is_err"] = (lett[COL_STATO_LETT].str.strip() == "ERR").astype(int)
+        err_agg = lett.groupby("_key")["is_err"].mean().rename("pct_err").reset_index()
+
+        # diag_bit_00..15
+        diag = lett[["_key", COL_DIAGNOSTICA]].copy()
+        diag[COL_DIAGNOSTICA] = diag[COL_DIAGNOSTICA].str.strip().str.zfill(16)
+        for i in range(16):
+            diag[f"diag_bit_{i:02d}"] = diag[COL_DIAGNOSTICA].str[i].eq("1").astype(int)
+        diag_cols = [f"diag_bit_{i:02d}" for i in range(16)]
+        diag_agg = diag.groupby("_key")[diag_cols].max().reset_index()
+
+        df_cs = df_cs.merge(err_agg,  on="_key", how="left")
+        df_cs = df_cs.merge(diag_agg, on="_key", how="left")
+        df_cs["pct_err"] = df_cs["pct_err"].fillna(0)
+        for col in diag_cols:
+            df_cs[col] = df_cs[col].fillna(0).astype(int)
+
+    return df_cs
 
 
 def feat_engineer(df_cs, ref_date):
@@ -113,11 +142,15 @@ def feat_engineer(df_cs, ref_date):
       costruttore         -> alias leggibile di COL_COSTRUTTORE
       modello             -> alias leggibile di COL_MODELLO
       tecnologia          -> alias leggibile di COL_TECN_COM
+      comune              -> alias leggibile di COL_COMUNE
+      accessibile         -> alias leggibile di COL_ACCESSIBILE
+      telegestione        -> alias leggibile di COL_TELEGESTIONE
     """
     from src.config import (
         COL_ANNO_COSTR, COL_CONSUMO, COL_DATA_INST,
         COL_FIRMWARE, COL_ULT_COM, COL_ULT_MIS,
         COL_COSTRUTTORE, COL_MODELLO, COL_TECN_COM,
+        COL_COMUNE, COL_ACCESSIBILE, COL_TELEGESTIONE,
     )
 
     df = df_cs.copy()
@@ -142,5 +175,8 @@ def feat_engineer(df_cs, ref_date):
     df["costruttore"] = df[COL_COSTRUTTORE].fillna("N/A")
     df["modello"]     = df[COL_MODELLO].fillna("N/A")
     df["tecnologia"]  = df[COL_TECN_COM].fillna("N/A")
+    df["comune"]      = df[COL_COMUNE].fillna("N/A")
+    df["accessibile"] = df[COL_ACCESSIBILE].fillna("N/A")
+    df["telegestione"]= df[COL_TELEGESTIONE].fillna("N/A")
 
     return df
